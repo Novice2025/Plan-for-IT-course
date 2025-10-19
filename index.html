@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT English Program: Quest Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #0d1a26;
+            color: #00ff84;
+            font-size: 1rem;
+        }
+
+        .terminal-border {
+            border: 2px solid #00ff84;
+            box-shadow: 0 0 10px #00ff84, inset 0 0 10px #00ff84;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        
+        .glow-text {
+            text-shadow: 0 0 8px #00ff84;
+        }
+
+        .quest-card {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00ff84;
+            transition: all 0.3s ease;
+        }
+        
+        .quest-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 255, 132, 0.5);
+        }
+
+        .completed {
+            background-color: rgba(0, 255, 132, 0.2);
+            border-color: #008040;
+            box-shadow: 0 0 8px #008040, inset 0 0 8px #008040;
+        }
+
+        .completed-button {
+            background-color: #008040;
+            color: #fff;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #00ff84;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Custom list styling for a retro look */
+        .content-list {
+            list-style: none; /* Remove default list style */
+            counter-reset: my-counter;
+        }
+
+        .content-list li:before {
+            content: counter(my-counter) ". ";
+            counter-increment: my-counter;
+            color: #ffde54; /* A yellowish color for the numbers */
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-sm md:text-base">
+
+    <!-- Header Section -->
+    <header class="flex flex-col md:flex-row justify-between items-center text-center md:text-left mb-8 p-4 terminal-border rounded-lg glow-text">
+        <h1 class="text-4xl md:text-5xl">MISSION LOG: IT ENGLISH PROGRAM</h1>
+        <div class="mt-4 md:mt-0">
+            <p class="text-sm md:text-base">STATUS: Active</p>
+            <div id="user-id" class="text-sm md:text-base">AUTHENTICATING...</div>
+        </div>
+    </header>
+
+    <!-- Main Content - Program Overview -->
+    <main id="main-content" class="space-y-8">
+        <section class="p-6 terminal-border rounded-lg mb-8">
+            <h2 class="text-3xl mb-4 glow-text">PROGRAM OVERVIEW // [PROGRAM_STATUS]</h2>
+            <div class="bg-gray-800 p-4 rounded-md mb-4 text-sm md:text-base">
+                <p>DURATION: 12 months (4 modules)</p>
+                <p>TARGET AUDIENCE: Brazilian IT professionals</p>
+                <p>FOCUS: Workplace communication, interview skills, career success</p>
+                <p>APPROACH: Bilingual phrase chunks, role-plays, blended learning</p>
+            </div>
+            
+            <h3 class="text-2xl mb-2 glow-text">MISSIONS:</h3>
+            <ul class="text-base">
+                <li><span class="text-red-400">// MISSION 1 //</span> FOUNDATIONS & INTERVIEW BASICS (MONTHS 0-3)</li>
+                <li><span class="text-yellow-400">// MISSION 2 //</span> INTERMEDIATE COMMUNICATION & INTERVIEW SKILLS (MONTHS 4-6)</li>
+                <li><span class="text-purple-400">// MISSION 3 //</span> ADVANCED COMMUNICATION & INTERVIEW MASTERY (MONTHS 7-9)</li>
+                <li><span class="text-blue-400">// MISSION 4 //</span> SPECIALIZATION & CAREER READINESS (MONTHS 10-12)</li>
+            </ul>
+        </section>
+
+        <!-- Dynamic Module Sections will be inserted here by JavaScript -->
+        <div id="program-modules" class="space-y-6">
+            <div id="loading-spinner" class="flex justify-center items-center py-12">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        setLogLevel('debug');
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let userId;
+        let userProgressRef;
+        let unsubscribe = () => {};
+
+        const programData = [
+            {
+                id: 'module-1',
+                title: 'MODULE 1 // FOUNDATIONS & INTERVIEW BASICS',
+                duration: 'Months 0-3',
+                weeks: [
+                    { id: 'week-1', title: 'Week 1: Greetings & Introductions', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Common workplace greetings on phone, chat, email, WhatsApp: Hi, there!, Good morning / afternoon / evening, How can I help you?, Nice to meet you, Hello, [name]','Polite expressions for starting conversations: How are you doing today?, I hope you’re well.','Introducing oneself professionally: My name is [Name]. I’m the [job title] here., I work in [department]., I’m responsible for [task/project].','Basic closing remarks: Thank you for your time., Have a great day!','Expressions for role-plays/emails: “Hello, this is [Name] from [Company]. How can I assist you?”, “I would like to introduce myself as…”, “Thank you for contacting us.”'] }] },
+                    { id: 'week-2', title: 'Week 2: Describing Roles & Daily Tasks', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Verbs for job responsibilities: manage, develop, test, support, maintain, deploy','Useful sentence structures: I am responsible for…, My daily tasks include…, I work on projects involving…','Describing typical workday: I usually start by checking…, In the afternoon, I collaborate with…','Expressing frequency and routines: I often use…, Sometimes I attend meetings about…','Sample phrases: “I manage the IT support team.”, “My job involves testing new software releases.”, “I regularly update the database.”'] }] },
+                    { id: 'week-3', title: 'Week 3: Talking About Skills & Tools', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Common IT skills and software/tools vocabulary: programming languages (Java, Python, etc.), platforms (AWS, Azure), tools (Git, Jira)','Expressing proficiency: I am proficient in…, I have experience using…, I am skilled at…','Phrases for interview answers on skills: “One of my strengths is…”, “I learned to use [tool] during…”, “I have worked with [technology] for [time period].”','Vocabulary flashcard examples: Proficient, experienced, familiar with, advanced knowledge of.'] }] },
+                    { id: 'week-4', title: 'Week 4: Basic Interview Questions & Answers', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Common short interview questions: Tell me about yourself., Why do you want this job?, What are your strengths and weaknesses?','Positive and concise answer structures: I am [adjective] and [skill]., I enjoy challenges because…, A weakness I am working to improve is…','Polite fillers and softeners: I believe that…, In my opinion…, To be honest…','Practice phrases: “I am a detail-oriented software developer.”, “I want this job because it aligns with my skills.”, “I am working on improving my public speaking.”'] }] },
+                    { id: 'week-5', title: 'Week 5: Past Experiences & Achievements', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Past tense verbs: Completed, developed, led, solved, improved','Present perfect for recent achievements: I have completed…, I have worked on…','STAR technique introduction and phrase starters: Situation: “In my previous job…”, Task: “I was responsible for…”, Action: “I implemented…”, Result: “This led to…”','Describing challenges and successes professionally','Example sentences: “I led a team that developed a new app.”, “I have improved system stability by 30%.”, “In a recent project, I had to troubleshoot network issues.”'] }] },
+                    { id: 'week-6', title: 'Week 6: Problem Solving & Troubleshooting', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Diagnostic and solution vocabulary: identify, diagnose, fix, troubleshoot, resolve','Phrases to explain problems and solutions: The issue was caused by…, We resolved it by…, I tested the system and found…','Interview language for problem-solving questions: “Can you describe a technical problem you solved?”, “How did you approach the issue?”','Role-play and writing phrases: “I diagnosed the error in the database.”, “To fix the problem, I updated the software.”, “I collaborated with the team to resolve the outage.”'] }] },
+                    { id: 'week-7', title: 'Week 7: Teamwork & Collaboration', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Describing collaboration roles: work with, coordinate, lead, support, assist','Phrases for giving and asking opinions politely: I think that…, In my opinion…, Could you clarify…?','Language for negotiation and agreement: I understand, but…, Let’s consider…, I agree/disagree because…','Interview teamwork questions practice: “Describe a time you worked as part of a team.”, “How do you handle conflicts?”','Sample phrases: “I work closely with the development team.”, “We agreed on the project priorities.”, “I helped resolve a disagreement by…”'] }] },
+                    { id: 'week-8', 'title': 'Week 8: Integration & Review', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Review all greetings, self-introductions, role descriptions, skills phrases','Practice combining these in meetings and interviews','Interview readiness vocabulary: confident, prepare, clarify, summarize, emphasize','Self-assessment language: I feel confident about…, I need to improve my…, I found the interview questions…'] },
+                        { heading: 'Full Simulated Meeting and Assessment:' },
+                        { list: ['Full Simulated Meeting (60 minutes):','Self and Peer Assessment (20 minutes):','Oral Presentations (25 minutes):','Feedback and Targeted Language Support (15 minutes):'] }] },
+                ]
+            },
+            {
+                id: 'module-2',
+                title: 'MODULE 2 // INTERMEDIATE COMMUNICATION & INTERVIEW SKILLS',
+                duration: 'Months 4-6',
+                weeks: [
+                    { id: 'week-9', title: 'Week 9: Phrasal Verbs & Collocations', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Common phrasal verbs used in IT and project contexts: set up, log in, take down, back up, bring up, run into, look into','Collocations related to software and hardware: run a program, launch an application, report a bug, push an update','Practice recognizing meaning from context, Examples of polite paraphrasing using phrasal verbs','Sample phrases: “I set up the server last week.”, “We need to look into the database issue.”, “Can you back up the files before the update?”'] }] },
+                    { id: 'week-10', title: 'Week 10: Polite Disagreement & Clarification', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Language for disagreeing politely: I see what you mean, but…, I’m afraid I have a different view., Perhaps we can consider…','Asking for clarification: Could you please explain that again?, I’m not sure I follow. Could you clarify?','Managing misunderstandings diplomatically','Sample phrases: “I see your point, but I think the deadline might be tight.”, “Could you please clarify which version you mean?”, “I’m afraid I don’t agree with that approach.”'] }] },
+                    { id: 'week-11', title: 'Week 11: Writing Bug Reports & Project Updates', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Structure of bug reports: Description of error, steps to reproduce, expected vs actual results','Phrases for writing clear updates: The issue has been identified as…, The development team is currently working on…, We expect to deploy the fix by…','Using formal tone and professional vocabulary','Sample phrases: “Bug Report: The application crashes when clicking ‘Save.’” , “Project Update: Phase 2 development is 80% complete.”, “The fix for the login bug is currently being tested.”'] }] },
+                    { id: 'week-12', title: 'Week 12: Sprint Planning & Task Management', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Vocabulary for planning: backlog, sprint, prioritize, assign, estimate, deadline','Phrases for task coordination: Let’s prioritize tasks based on urgency., Who will take ownership of this feature?, The deadline for this sprint is…','Conducting and contributing to sprint meetings','Sample phrases: “We need to assign this bug to the QA team.”, “The sprint deadline is Friday afternoon.”, “Can we estimate how long this feature will take?”'] }] },
+                    { id: 'week-13', title: 'Week 13: Troubleshooting & Customer Support Dialogues', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Identifying customer issues: Are you experiencing…?, Can you describe the problem?','Explaining troubleshooting steps: Let’s try restarting the device., Please check that the cables are connected.','Apologizing and offering solutions: I apologize for the inconvenience., We will resolve this as soon as possible.','Sample phrases: “Is your internet connection stable?”, “Try clearing your browser cache and restart.”, “Thank you for your patience while we fix this.”'] }] },
+                    { id: 'week-14', title: 'Week 14: Mid-Project Presentations', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Structuring presentations: introduction, body, conclusion','Signposting language: First, I will discuss…, Next, let’s look at…, To conclude…','Language to describe progress and challenges, Responding to questions politely','Sample phrases: “Today I will present the progress on the new software module.”, “We have completed 60% of the planned tasks.”, “Do you have any questions about this phase?”'] }] },
+                    { id: 'week-15', title: 'Week 15: Peer Feedback & Collaborative Review', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Giving constructive feedback: I think this part was very clear, but…, You might consider adding more detail here., Great job on explaining the issue.','Receiving feedback politely: Thank you for your feedback., That’s a good point. I will improve on that.','Collaborative language for team discussions','Sample phrases: “I appreciate your insights on the testing process.”, “Could you elaborate a bit more on this aspect?”, “Let’s discuss how to integrate these suggestions.”'] }] },
+                    { id: 'week-16', title: 'Week 16: Review & Practical Application', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Review of all module vocabulary and phrases','Integration of polite disagreement, phrasal verbs, customer support language, and presentation skills','Preparation for next module’s advanced communication'] },
+                        { heading: 'Activities:' },
+                        { list: ['Complex role-play simulating sprint planning and review meeting, Peer-to-peer bug report writing and presentation, Group discussion with polite debates, Mock customer support call scenarios'] }] },
+                ]
+            },
+            {
+                id: 'module-3',
+                title: 'MODULE 3 // ADVANCED PROFESSIONAL COMMUNICATION & INTERVIEW MASTERY',
+                duration: 'Months 7-9',
+                weeks: [
+                    { id: 'week-17', title: 'Week 17: Negotiation Language & Persuasive Communication', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Phrases for proposing ideas and requests: I would suggest…, How about we consider…?, Could we possibly…?','Agreeing and disagreeing politely: That sounds reasonable, however…, I’m afraid I have a different view., Perhaps we can consider…','Persuasive language to influence decisions: Based on the data…, The advantage of this approach is…','Closing negotiation politely: Shall we agree on…?, I appreciate your flexibility.','Sample phrases: “I would suggest allocating more resources to testing.”, “Could we possibly extend the deadline by two days?”, “Based on the analysis, this solution reduces costs.”'] }] },
+                    { id: 'week-18', title: 'Week 18: Technical Presentation Skills', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Structuring presentations clearly: Introduction, Main points, Conclusion','Signposting: First, I’d like to talk about…, Moving on to…, To sum up…','Using visuals language: As you can see in this diagram…, The graph illustrates that…','Phrasing for answering questions: That’s a good question. What I can tell you is…, To clarify…, If I understand correctly…','Sample phrases: “Today, I’ll present the progress of our project.”, “This chart shows the network latency over time.”, “Does anyone have any questions before we continue?”'] }] },
+                    { id: 'week-19', title: 'Week 19: Behavioral & Situational Interview Question Mastery', content: [{ heading: 'Key Language Points:' },
+                        { list: ['STAR method practice (Situation, Task, Action, Result)','Language for describing teamwork, leadership, challenges','Phrases for reflecting on experience and learning: I learned that…, This experience taught me…, I took initiative by…','Handling difficult interview questions: When faced with… I responded by…, I adapted by…','Sample phrases: “In a previous role, I faced a tight deadline…”, “I took initiative by organizing a team meeting…”, “The result was a 15% increase in system efficiency.”'] }] },
+                    { id: 'week-20', title: 'Week 20: Advanced Technical Writing & Client Communication', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Professional email phrases: Please find attached…, If you require further information, please let me know., I look forward to your feedback.','Writing proposals and reports: The objective of this project is…, We recommend implementing…','Explaining technical content clearly for clients: To put it simply…, This means that…, The impact will be…','Sample phrases: “Please find attached the project specification document.”, “We recommend upgrading the server for better performance.”, “This change will reduce downtime by 20%.”'] }] },
+                    { id: 'week-21', title: 'Week 21: Listening & Summarizing High-Speed Webinars', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Strategies for effective fast speech listening: Focus on keywords and main ideas, Note-taking techniques','Summarizing skills: To summarize…, The key points are…, In conclusion…','Practice completing summaries with missing information','Sample phrases: “The presenter focused on cloud security challenges.”, “Key points included scalability and automation.”, “In conclusion, adopting these measures improves data safety.”'] }] },
+                    { id: 'week-22', title: 'Week 22: Personalized Career Coaching & Real-World Role-Plays', content: [{ heading: 'Focus Areas:' },
+                        { list: ['Tailored feedback on interview skills and communication','Practice addressing individual learner goals and challenges','Role-play real interview scenarios: Technical questions, Behavioral questions, Negotiation for salary or conditions','Career communication skills: Networking conversations, LinkedIn profile presentation, Elevator pitch practice'] }] },
+                    { id: 'week-23', title: 'Week 23: Integration & Advanced Role-Play Practice', content: [{ heading: 'Activities:' },
+                        { list: ['Extended role-plays simulating complex meetings, interviews, and presentations','Peer and instructor feedback on fluency, accuracy, persuasion','Preparation and delivery of final project presentation','Mock interview panels with full question-answer rounds','Reflection on progress and strategies for ongoing improvement'] }] },
+                    { id: 'week-24', title: 'Week 24: Integration & Advanced Role-Play Practice', content: [{ heading: 'Activities:' },
+                        { list: ['Extended role-plays simulating complex meetings, interviews, and presentations','Peer and instructor feedback on fluency, accuracy, persuasion','Preparation and delivery of final project presentation','Mock interview panels with full question-answer rounds','Reflection on progress and strategies for ongoing improvement'] }] },
+                ]
+            },
+            {
+                id: 'module-4',
+                title: 'MODULE 4 // SPECIALIZATION & CAREER READINESS',
+                duration: 'Months 10-12',
+                weeks: [
+                    { id: 'week-25', title: 'Week 25: Agile, DevOps, Cybersecurity & AI Vocabulary', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Agile methodology terms: sprint, backlog, stand-up, user story, velocity','DevOps concepts: continuous integration, deployment, automation, pipeline','Cybersecurity vocabulary: firewall, breach, vulnerability, malware, encryption','AI/machine learning words: algorithm, model, training data, neural network, automation','Using vocabulary in context: “In our sprint, we focus on completing user stories.”, “We use continuous integration to streamline builds.”, “The system is protected by multiple firewalls.”, “AI models require large amounts of training data.”'] }] },
+                    { id: 'week-26', title: 'Week 26: Crisis Communication & Conflict Resolution', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Language to manage crises: “We acknowledge the issue and are investigating.”, “Our priority is to resolve this promptly.”, “We apologize for any inconvenience caused.”','Conflict resolution phrases: “Let’s discuss to find a common ground.”, “I understand your concerns.”, “How can we move forward constructively?”','Language for calming and clarifying misunderstandings','Role-play crisis scenarios and negotiations'] }] },
+                    { id: 'week-27', title: 'Week 27: Full Mock Interviews', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Comprehensive interview simulation covering: Self-introduction, Technical and behavioral questions, Negotiation dialogues','Interview etiquette language: “Thank you for this opportunity.”, “Could I clarify the next steps?”','Feedback and improvement discussion post-interview'] }] },
+                    { id: 'week-28', title: 'Week 28: Networking & Professional Socializing Language', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Introducing oneself in networking settings: “Hi, I’m [Name], working in [field].” , “What kind of projects are you involved in?”','Exchanging contact information politely: “Can I add you on LinkedIn?”, “Please feel free to reach out anytime.”','Small talk starters: “How do you find this event?”, “What trends are you most excited about?”','Professional follow-ups: “It was great meeting you.”, “Let’s keep in touch.”'] }] },
+                    { id: 'week-29', title: 'Week 29: Capstone Project Preparation', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Planning presentation structure and content','Language for setting objectives and summarizing progress','Practice drafting slides and speaker notes with clear language','Use of transition phrases to maintain flow','Rehearsal language: “Let me start with an overview…”, “This section highlights…”'] }] },
+                    { id: 'week-30', title: 'Week 30: Capstone Project Delivery', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Delivering clear and confident presentations','Handling audience questions professionally: “Thank you for the question.”, “I’ll look into that and get back to you.”','Using supportive language during Q&A, Receiving feedback graciously'] }] },
+                    { id: 'week-31', title: 'Week 31: Certification Exam Preparation', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Practice test format and timing strategies','Academic and professional language for exams','Expressing exam readiness and managing exam stress: “I feel prepared to demonstrate my skills.”, “Time management during the test is critical.”','Mock exercises for reading, writing, listening, and speaking'] }] },
+                    { id: 'week-32', title: 'Week 32: Final Career Coaching & Wrap-up', content: [{ heading: 'Key Language Points:' },
+                        { list: ['Goal setting and action plan language','Expressions for career aspirations and next steps','Summarizing learnings and feedback: “This program has improved my confidence.”, “I plan to continue developing my communication skills.”','Professional email and LinkedIn profile updates','Strategies for continuing language practice post-program'] }] },
+                ]
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const modulesContainer = document.getElementById('program-modules');
+
+            async function initFirebase() {
+                try {
+                    if (!firebaseConfig) {
+                        console.error("Firebase config is missing.");
+                        loadingSpinner.innerHTML = '<p class="text-red-500">Error: Firebase config not found. Progress tracking will not be available.</p>';
+                        return;
+                    }
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    loadingSpinner.style.display = 'block';
+
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            document.getElementById('user-id').textContent = `USER ID: ${userId}`;
+                            userProgressRef = doc(db, 'artifacts', appId, 'users', userId, 'program-progress', 'status');
+                            subscribeToProgress();
+                        } else {
+                            document.getElementById('user-id').textContent = `USER ID: NOT AUTHENTICATED`;
+                            loadingSpinner.style.display = 'none';
+                        }
+                    });
+
+                } catch (e) {
+                    console.error("Error initializing Firebase:", e);
+                    loadingSpinner.innerHTML = `<p class="text-red-500">Error: Failed to connect to database. Progress tracking is disabled.</p>`;
+                }
+            }
+
+            function subscribeToProgress() {
+                unsubscribe();
+                unsubscribe = onSnapshot(userProgressRef, (docSnap) => {
+                    const completedWeeks = docSnap.exists() ? docSnap.data().completedWeeks || [] : [];
+                    renderModules(completedWeeks);
+                    loadingSpinner.style.display = 'none';
+                }, (error) => {
+                    console.error("Error subscribing to progress updates:", error);
+                    loadingSpinner.innerHTML = `<p class="text-red-500">Error: Failed to load progress. Tracking is disabled.</p>`;
+                    renderModules([]);
+                });
+            }
+
+            function renderModules(completedWeeks) {
+                modulesContainer.innerHTML = '';
+                programData.forEach(module => {
+                    const moduleTitleElement = document.createElement('h3');
+                    moduleTitleElement.className = 'text-2xl md:text-3xl text-yellow-300 mt-6 mb-4';
+                    moduleTitleElement.textContent = module.title;
+                    modulesContainer.appendChild(moduleTitleElement);
+
+                    const moduleContentElement = document.createElement('div');
+                    moduleContentElement.className = 'p-4 space-y-4';
+
+                    module.weeks.forEach(week => {
+                        const isCompleted = completedWeeks.includes(week.id);
+                        let contentHtml = '';
+                        week.content.forEach(section => {
+                            if (section.heading) {
+                                contentHtml += `<h5 class="font-bold mt-4 text-white">${section.heading}</h5>`;
+                            } else if (section.list) {
+                                contentHtml += `<ul class="content-list mt-2 space-y-1">`;
+                                section.list.forEach(item => {
+                                    contentHtml += `<li>${item}</li>`;
+                                });
+                                contentHtml += `</ul>`;
+                            }
+                        });
+
+                        const weekElement = document.createElement('div');
+                        weekElement.id = week.id;
+                        weekElement.className = `quest-card rounded-md p-4 text-sm md:text-base ${isCompleted ? 'completed' : ''}`;
+                        weekElement.innerHTML = `
+                            <div class="flex flex-col md:flex-row justify-between items-center">
+                                <h4 class="text-2xl md:text-3xl font-bold text-red-400">MISSION ${week.title}</h4>
+                                <button data-week-id="${week.id}" class="complete-button mt-2 md:mt-0 px-4 py-2 rounded-lg glow-text bg-green-700 hover:bg-green-600 transition-colors ${isCompleted ? 'completed-button' : ''}">
+                                    ${isCompleted ? 'MISSION COMPLETE' : 'MARK COMPLETE'}
+                                </button>
+                            </div>
+                            <div class="mt-4 prose prose-base text-gray-300 max-w-none">${contentHtml}</div>
+                        `;
+                        moduleContentElement.appendChild(weekElement);
+                    });
+                    modulesContainer.appendChild(moduleContentElement);
+                });
+
+                document.querySelectorAll('.complete-button').forEach(button => {
+                    button.addEventListener('click', async (e) => {
+                        const weekId = e.target.dataset.weekId;
+                        if (!userId) {
+                            console.error("User not authenticated. Cannot update progress.");
+                            return;
+                        }
+
+                        try {
+                            const docSnap = await getDoc(userProgressRef);
+                            const currentCompletedWeeks = docSnap.exists() ? docSnap.data().completedWeeks || [] : [];
+                            let newCompletedWeeks;
+
+                            if (currentCompletedWeeks.includes(weekId)) {
+                                newCompletedWeeks = currentCompletedWeeks.filter(id => id !== weekId);
+                            } else {
+                                newCompletedWeeks = [...currentCompletedWeeks, weekId];
+                            }
+
+                            await setDoc(userProgressRef, { completedWeeks: newCompletedWeeks }, { merge: true });
+                        } catch (e) {
+                            console.error("Error updating document: ", e);
+                        }
+                    });
+                });
+            }
+
+            initFirebase();
+        });
+    </script>
+
+</body>
+</html>
